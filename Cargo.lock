@@ -16,6 +16,7 @@ dependencies = [
  "dotenv",
  "fern",
  "futures",
+ "getrandom 0.3.4",
  "id3",
  "image",
  "log",
@@ -30,6 +31,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "vlc-rc",
 ]

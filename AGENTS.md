@@ -284,3 +284,63 @@ character); couldn't verify without GitHub's page. The "Recent work" line in
 the Roadmap only mentions the AppImage - left as is. These docs commits are on
 `main` only; `stable` (what the installer fetches) stays at the v0.9.5 bump
 commit until the next release, which is fine since no installed file changed.
+
+### 2026-10-13 — Claude Code (SSO login, issue #11)
+
+**What changed:** Built SSO (OpenID Connect) login for issue #11 - a user whose
+Audiobookshelf only allows sign-in through authentik can't use Absotui at all
+today. It follows Audiobookshelf's native-app flow, worked out by reading the
+server's own `Auth.js` and `OidcAuthStrategy.js` (the public docs don't
+describe it): Absotui makes a PKCE request to `/auth/openid` itself (the server
+keeps the PKCE state in a session cookie that the final code exchange has to
+send back), opens the returned identity-provider link in the browser, catches
+the redirect on `http://127.0.0.1:41729/callback`, then swaps the code for the
+same tokens a password login returns. The login screen now checks the server's
+public `/status` after the address is entered: SSO-only servers skip the
+username/password prompts; servers offering both show "Username (leave empty
+to sign in with SSO)"; anything else, or a failed check, behaves exactly as
+before. If the browser can't reach this machine (SSH), a paste box accepts the
+address the browser ended on. Everything after "we have tokens" was pulled out
+of `auth_process` into `finish_login` so both paths share it. New optional
+`[auth] sso_callback_port` in `config.toml` (missing section = default).
+README documents it, including the one-time admin step: the loopback address
+has to be added under Settings > Authentication > Allowed Mobile Redirect URIs
+(Audiobookshelf matches it exactly, hence the fixed port).
+
+**Files:** `src/api/server/oidc_login.rs` (new), `src/api/server/auth_process.rs`,
+`src/logic/auth/auth_input.rs`, `src/config.rs`, `src/api/server/mod.rs`,
+`Cargo.toml`/`Cargo.lock` (`sha2`, `getrandom` - both already in the tree),
+`config.example.toml`, `README.md`.
+
+**How it was verified:** `cargo build`/`clippy`/`test` clean (82 passed: 63
+existing, 16 for the SSO module including the RFC 7636 PKCE test vector, 3 for
+config; clippy shows only the 8 existing `too_many_arguments` warnings).
+End to end against a fake Audiobookshelf + identity provider I wrote from the
+server source (scratch `XDG_CONFIG_HOME`, a stub `xdg-open` so no real browser
+opened; Paul's real server and config were never touched - the only thing sent
+to the real server was a read-only GET of its public `/status`, to confirm its
+shape). The fake checks the redirect whitelist, the session cookie, the state
+lookup, and that the PKCE verifier matches the challenge. Passed: SSO-only
+server (no prompts, user saved with the username from the identity provider
+and both tokens encrypted); server offering both (prompt text changes,
+password login still works, empty username starts SSO); redirect not
+whitelisted (message names the exact address to add, nothing saved); browser
+that can't reach the machine (junk paste gets a hint, the real address
+finishes the login); Esc (back to the prompt, port released, retry works);
+callback port already in use; server rejecting the sign-in; a forged request
+with the wrong `state` and stray requests to the callback port (ignored, the
+wait continues, the real sign-in still completes); password-only server
+(prompts unchanged). **Not verified:** a real Audiobookshelf with a real
+identity provider (this user can't reach the Docker socket, so couldn't stand
+one up) - the fake is only as faithful as my reading of the server code;
+macOS; a real browser; refreshing an SSO-issued token later (it should use the
+existing refresh path, but nothing tested it).
+
+**Open questions / handoff:** Committed and pushed with Paul's go-ahead the
+same day, then released (see the release entry below). Issue #11 has no reply
+yet - Paul approves public replies separately. Best next check is the person
+who asked: they use authentik and could try the release.
+Default port 41729 was picked arbitrarily; changing it later means every admin
+who already allowed the old address has to add the new one. The README's
+"Project status" line still says the only server changes are podcast
+subscriptions - still true, SSO only creates a normal login session.

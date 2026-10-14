@@ -73,91 +73,97 @@ pub async fn auth_process(username: &str, password: &str, server_address: &str) 
             return Err(Report::new(std::io::Error::other("No authentication token received from server")));
         }
 
-        let all_libraries = get_all_libraries(effective_token, server_address.to_string()).await?;
-        let library_names = collect_library_names(&all_libraries).await;
-        let _media_types = collect_media_types(&all_libraries).await;
-        let library_ids = collect_library_ids(&all_libraries).await;
+        finish_login(username, server_address, effective_token, login_response.user.refresh_token.as_deref()).await
+    } else {
+        Err(Report::new(std::io::Error::other("Login failed")))
+    }
+}
 
-        // A fresh server, or an account restricted from every library, legitimately has
-        // zero accessible libraries - indexing [0] below would panic inside this spawned
-        // task before update_auth_in_progress("0") ever runs (see auth_input.rs), leaving
-        // the login screen stuck on "authenticating" forever with no visible error.
-        if library_names.is_empty() || library_ids.is_empty() {
-            return Err(Report::new(std::io::Error::other(
-                "This account has no accessible libraries - grant it at least one library on the server and try again.",
-            )));
+/// Everything after the server has handed over tokens, whether they came from a password
+/// login or an SSO one: fetch the libraries, encrypt the tokens, and save the user.
+pub async fn finish_login(username: &str, server_address: &str, access_token: &str, refresh_token: Option<&str>) -> Result<()> {
+    let all_libraries = get_all_libraries(access_token, server_address.to_string()).await?;
+    let library_names = collect_library_names(&all_libraries).await;
+    let _media_types = collect_media_types(&all_libraries).await;
+    let library_ids = collect_library_ids(&all_libraries).await;
+
+    // A fresh server, or an account restricted from every library, legitimately has
+    // zero accessible libraries - indexing [0] below would panic inside this spawned
+    // task before update_auth_in_progress("0") ever runs (see auth_input.rs), leaving
+    // the login screen stuck on "authenticating" forever with no visible error.
+    if library_names.is_empty() || library_ids.is_empty() {
+        return Err(Report::new(std::io::Error::other(
+            "This account has no accessible libraries - grant it at least one library on the server and try again.",
+        )));
+    }
+
+    // Token encryption before insert it in the database. A failure here (almost
+    // always a missing/unreadable ABSOTUI_SECRET_KEY) used to be logged and
+    // swallowed, leaving `token_encrypted` as an empty string that still got
+    // written to the users table - login looked successful, but the very next
+    // launch would 401 against that empty token with no indication why. Fail the
+    // login itself instead, so nothing unusable ever reaches the database.
+    let token_encrypted = match encrypt_token(access_token) {
+        Ok(encrypted_token) => {
+            info!("Token successfully encrypted");
+            encrypted_token
         }
+        Err(e) => {
+            return Err(Report::new(std::io::Error::other(format!(
+                "Couldn't save your login: {e}"
+            ))));
+        }
+    };
 
-        // Token encryption before insert it in the database. A failure here (almost
-        // always a missing/unreadable ABSOTUI_SECRET_KEY) used to be logged and
-        // swallowed, leaving `token_encrypted` as an empty string that still got
-        // written to the users table - login looked successful, but the very next
-        // launch would 401 against that empty token with no indication why. Fail the
-        // login itself instead, so nothing unusable ever reaches the database.
-        let token_encrypted = match encrypt_token(effective_token) {
-            Ok(encrypted_token) => {
-                info!("Token successfully encrypted");
-                encrypted_token
-            }
+    // Empty when the server didn't return one (legacy `token`-only auth, or a
+    // server too old for the JWT flow) - the refresh mechanism (see
+    // src/api/server/refresh_token.rs) treats an empty refresh token as "nothing
+    // to refresh with" and simply never fires, which is the correct behavior for
+    // a token that isn't a short-lived JWT to begin with.
+    let mut refresh_token_encrypted = String::new();
+    if let Some(refresh_token) = refresh_token.filter(|t| !t.is_empty()) {
+        match encrypt_token(refresh_token) {
+            Ok(encrypted) => refresh_token_encrypted = encrypted,
             Err(e) => {
                 return Err(Report::new(std::io::Error::other(format!(
                     "Couldn't save your login: {e}"
                 ))));
             }
-        };
-
-        // Empty when the server didn't return one (legacy `token`-only auth, or a
-        // server too old for the JWT flow) - the refresh mechanism (see
-        // src/api/server/refresh_token.rs) treats an empty refresh token as "nothing
-        // to refresh with" and simply never fires, which is the correct behavior for
-        // a token that isn't a short-lived JWT to begin with.
-        let mut refresh_token_encrypted = String::new();
-        if let Some(refresh_token) = login_response.user.refresh_token.filter(|t| !t.is_empty()) {
-            match encrypt_token(&refresh_token) {
-                Ok(encrypted) => refresh_token_encrypted = encrypted,
-                Err(e) => {
-                    return Err(Report::new(std::io::Error::other(format!(
-                        "Couldn't save your login: {e}"
-                    ))));
-                }
-            }
         }
-
-        // Init for handle_l
-        let is_loop_break = "0".to_string();
-        let is_vlc_running = "0".to_string();
-        let is_vlc_launched_first_time = "1".to_string();
-
-
-        // Writting in database : 
-
-        // init a new user
-        let users = vec![
-            User {
-                server_address: server_address.to_string(),
-                username: username.to_string(),
-                token: token_encrypted,
-                is_default_usr: true,
-                name_selected_lib: library_names[0].clone(), // by default we take the first library
-                id_selected_lib: library_ids[0].clone(),
-                is_loop_break,
-                is_vlc_launched_first_time,
-                speed_rate: 1.0,
-                is_vlc_running,
-                is_show_key_bindings: "1".to_string(),
-                is_speed_adjusted_time: "1".to_string(),
-                is_podcast_autoplay: "0".to_string(),
-                is_per_item_speed: "0".to_string(),
-                is_auto_download: "0".to_string(),
-                refresh_token: refresh_token_encrypted,
-            }
-        ];
-
-        // insert the new user in database
-        let _ = db_insert_usr(&users);
-
-        Ok(()) 
-    } else {
-        Err(Report::new(std::io::Error::other("Login failed"))) 
     }
+
+    // Init for handle_l
+    let is_loop_break = "0".to_string();
+    let is_vlc_running = "0".to_string();
+    let is_vlc_launched_first_time = "1".to_string();
+
+
+    // Writting in database :
+
+    // init a new user
+    let users = vec![
+        User {
+            server_address: server_address.to_string(),
+            username: username.to_string(),
+            token: token_encrypted,
+            is_default_usr: true,
+            name_selected_lib: library_names[0].clone(), // by default we take the first library
+            id_selected_lib: library_ids[0].clone(),
+            is_loop_break,
+            is_vlc_launched_first_time,
+            speed_rate: 1.0,
+            is_vlc_running,
+            is_show_key_bindings: "1".to_string(),
+            is_speed_adjusted_time: "1".to_string(),
+            is_podcast_autoplay: "0".to_string(),
+            is_per_item_speed: "0".to_string(),
+            is_auto_download: "0".to_string(),
+            refresh_token: refresh_token_encrypted,
+        }
+    ];
+
+    // insert the new user in database
+    let _ = db_insert_usr(&users);
+
+    Ok(())
 }

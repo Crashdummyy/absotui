@@ -17,6 +17,14 @@ address = "localhost"
 # Port:
 port = "1234"
 
+#### SIGN-IN ####
+[auth]
+# Signing in with SSO (OpenID Connect) receives the browser's redirect on your own
+# machine, at http://127.0.0.1:<this port>/callback. The Audiobookshelf admin has to
+# allow that exact address under Settings > Authentication > Allowed Mobile Redirect
+# URIs. Only change the port if something else on your machine is using it.
+sso_callback_port = 41729
+
 #### DOWNLOADS ####
 [downloads]
 # When Settings > Auto Download is turned on, this is how many books from the top of
