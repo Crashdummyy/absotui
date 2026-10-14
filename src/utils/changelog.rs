@@ -1262,8 +1262,7 @@ let changelog_76 = "Changelog Absotui v0.9.4 (29/09/2026) \n\
          \n\
          Enjoy!\n
          ####\n".to_string();
-let changelog_77 = format!(
-    "Changelog Absotui v{VERSION} (06/10/2026) \n\
+let changelog_77 = "Changelog Absotui v0.9.5 (06/10/2026) \n\
          \n\
          Fixed:\n\
          - Logging in when Absotui's secret key (ABSOTUI_SECRET_KEY in the\n\
@@ -1275,10 +1274,29 @@ let changelog_77 = format!(
            and points at the secret key instead.\n\
          \n\
          Enjoy!\n
+         ####\n".to_string();
+let changelog_78 = format!(
+    "Changelog Absotui v{VERSION} (13/10/2026) \n\
+         \n\
+         New:\n\
+         - Sign in through your server's identity provider (SSO / OpenID\n\
+           Connect), for servers like authentik or Keycloak where password\n\
+           login is turned off. Enter your server address as usual: if the\n\
+           server only offers SSO, Absotui goes straight to your browser,\n\
+           and if it offers both, leave the username empty. Running over\n\
+           SSH? Open the link anywhere and paste the address your browser\n\
+           ends up on. The server admin needs to allow\n\
+           http://127.0.0.1:41729/callback once, under Settings >\n\
+           Authentication > Allowed Mobile Redirect URIs in Audiobookshelf -\n\
+           Absotui shows the exact address if the server turns it down.\n\
+           More in the README.\n\
+         \n\
+         Enjoy!\n
          ####\n"
 );
 
 
+    changelog.push_str(&changelog_78);
     changelog.push_str(&changelog_77);
     changelog.push_str(&changelog_76);
     changelog.push_str(&changelog_75);
