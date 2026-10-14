@@ -24,7 +24,7 @@
 <p align="center">
   <a href="#-features">Features</a> •
   <a href="#-installation">Installation</a> •
-  <a href="#-roadmap">Roadmap</a> •
+  <a href="#%EF%B8%8F-roadmap">Roadmap</a> •
   <a href="#-notes">More info</a>
 </p>
 
@@ -166,7 +166,7 @@ This uses the same OpenID support as the Audiobookshelf mobile app, so it needs 
 ---
 
 ## 🛠️ Roadmap
-Recent work: each Linux release now also ships as an AppImage (see Installation above).
+Recent work: sign in through your server's identity provider (SSO / OpenID Connect), and each Linux release now also ships as an AppImage (see Installation above).
 
 Planned: an AUR package (`absotui-bin`), on hold until AUR registrations reopen.
 
