@@ -344,3 +344,33 @@ Default port 41729 was picked arbitrarily; changing it later means every admin
 who already allowed the old address has to add the new one. The README's
 "Project status" line still says the only server changes are podcast
 subscriptions - still true, SSO only creates a normal login session.
+
+### 2026-10-13 — Claude Code (v0.10.0 release)
+
+**What changed:** Cut v0.10.0 (minor - SSO login is a new user-facing feature,
+same call as v0.9.0's podcast management; the in-app update check and the
+installer compare versions by equality only, so a two-digit minor is safe). The
+SSO work from the entry above was committed and pushed with Paul's go-ahead,
+followed by a v0.10.0 changelog entry (v0.9.5's was frozen first). No code
+changed after the SSO commit.
+
+**How it was verified:** Release workflow and binary build both succeeded; all
+12 assets are on the release (3 tarballs, 2 AppImages, 2 `.zsync`, desktop file,
+svg, `config.example.toml`, `hello_absotui.sh`, `SHA256SUMS.txt`). Downloaded the
+release files and checked them against `SHA256SUMS.txt` (all match); the
+released binary and the AppImage both report 0.10.0 and the binary contains the
+SSO code; its highest glibc requirement is still 2.34 (read from the ELF table,
+so the v0.9.4 older-systems fix is intact). `config.example.toml` changed in this
+release, and the copies served live from `stable` (`config.example.toml`,
+`hello_absotui.sh`, `absotui.desktop`, `absotui.svg`) are byte-identical to the
+release assets, so installs and updates won't hit "Incorrect shasum".
+
+**Open questions / handoff:** The reply on issue #11 is still unposted -
+waiting on Paul's approval of the wording; it should ask whether the reporter
+is their server's admin (they have to allow `http://127.0.0.1:41729/callback`)
+and whether they run Absotui over SSH. The real test is the reporter trying
+v0.10.0 against authentik. If that surfaces a mismatch between my fake server
+and the real one, the fake in the conversation scratch space is not kept - read
+`Auth.js`/`OidcAuthStrategy.js` again. Still on the list from earlier entries:
+`ubuntu-latest` becomes Ubuntu 26 on 2026-10-19, so watch the first release cut
+after that date.
